@@ -1502,6 +1502,8 @@ BEGIN_MESSAGE_MAP(CmainDlg, CBaseDialog)
 	ON_MESSAGE(UM_TAB_ICON_UPDATE, onTabIconUpdate)
 	ON_MESSAGE(UM_SET_PANE_TEXT, onSetPaneText)
 	ON_MESSAGE(UM_ON_ACCOUNT, OnAccount)
+	ON_MESSAGE(MM_JOY1BUTTONDOWN, onJoystickBtnDown)
+	ON_MESSAGE(MM_JOY1BUTTONUP, onJoystickBtnUp)
 	ON_COMMAND(ID_ACCOUNT_ADD, OnMenuAccountAdd)
 	ON_COMMAND_RANGE(ID_ACCOUNT_CHANGE_RANGE, ID_ACCOUNT_CHANGE_RANGE + 99, OnMenuAccountChange)
 	ON_COMMAND_RANGE(ID_ACCOUNT_EDIT_RANGE, ID_ACCOUNT_EDIT_RANGE + 99, OnMenuAccountEdit)
@@ -1538,6 +1540,32 @@ BOOL CmainDlg::PreTranslateMessage(MSG* pMsg)
 }
 
 // CmainDlg message handlers
+
+LRESULT CmainDlg::onJoystickBtnDown(WPARAM wParam, LPARAM lParam) {
+	if (wParam & JOY_BUTTON1CHG) {
+		MakeCall(accountSettings.telnumjoy1, false);
+	} 
+	else if (wParam & JOY_BUTTON2CHG) {
+		MakeCall(accountSettings.telnumjoy2, false);
+	}
+	else if (wParam & JOY_BUTTON3CHG) {
+		MakeCall(accountSettings.telnumjoy3, false);
+	}
+	else if (wParam & JOY_BUTTON4CHG) {
+		MakeCall(accountSettings.telnumjoy4, false);
+	}
+	pressedButton = wParam & (JOY_BUTTON1CHG | JOY_BUTTON2CHG | JOY_BUTTON3CHG | JOY_BUTTON4CHG);
+	return TRUE;
+}
+
+LRESULT CmainDlg::onJoystickBtnUp(WPARAM wParam, LPARAM lParam) {
+	if (pressedButton & wParam)
+	{
+		pressedButton = 0x00;
+		call_hangup_all_noincoming(false);
+	}
+	return TRUE;
+}
 
 void CmainDlg::OnBnClickedOk()
 {
@@ -1699,6 +1727,10 @@ BOOL CmainDlg::OnInitDialog()
 #ifdef _GLOBAL_VIDEO
 	previewWin = NULL;
 #endif
+
+	pressedButton = 0xff;
+	joyStickCaptured = false;
+	mainDlg->SetTimer(IDT_TIMER_JOYSTICK,1000, NULL);
 
 	if (!accountSettings.hidden) {
 
@@ -2494,6 +2526,22 @@ void CmainDlg::OnTimerContactBlink()
 	}
 }
 
+void CmainDlg::OnTimerJoystickCheck()
+{
+	JOYINFO joyinfo;
+	if (joyGetPos(JOYSTICKID1, &joyinfo) != JOYERR_UNPLUGGED) {
+		if (joyStickCaptured == false) {
+			joySetCapture(*mainDlg, JOYSTICKID1, 200, false);
+			joyStickCaptured = true;
+		}
+	} else {
+		if (joyStickCaptured) {
+			joyReleaseCapture(JOYSTICKID1);
+			joyStickCaptured = false;
+		}
+	}
+}
+
 void CmainDlg::OnTimer(UINT_PTR TimerVal)
 {
 	if (TimerVal == IDT_TIMER_AUTOANSWER) {
@@ -2544,6 +2592,9 @@ void CmainDlg::OnTimer(UINT_PTR TimerVal)
 	}
 	else if (TimerVal == IDT_TIMER_PROGRESS) {
 		OnTimerProgress();
+	}
+	else if (TimerVal == IDT_TIMER_JOYSTICK) {
+		OnTimerJoystickCheck();
 	}
 	else if (TimerVal == IDT_TIMER_CALL) {
 		OnTimerCall();
